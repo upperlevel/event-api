@@ -1,7 +1,9 @@
 package xyz.upperlevel.event;
 
 import lombok.RequiredArgsConstructor;
+import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
+import java.lang.reflect.Method;
 import java.util.*;
 
 @RequiredArgsConstructor
@@ -21,6 +23,26 @@ public abstract class GeneralEventManager<E extends Event, L extends GeneralEven
         Set<L> l = handlers.computeIfAbsent(listener.getPriority(), k -> new HashSet<>());
         l.add((L) listener);
         bake(listener.getClazz());
+    }
+
+    public void register(Listener listener) {
+        Method[] methods = listener.getClass().getDeclaredMethods();
+        for(Method method : methods) {
+            EventHandler handler = method.getAnnotation(EventHandler.class);
+            if(handler == null)
+                continue;
+            L l;
+            try {
+                l = eventHandlerToListener(listener, method, handler.priority());
+            } catch (Exception e) {
+                throw new RuntimeException("Exception caught while registering " + listener.getClass().getSimpleName(), e);
+            }
+            register(l);
+        }
+    }
+
+    protected L eventHandlerToListener(Object listener, Method method, byte priority) throws Exception {
+        throw new NotImplementedException();
     }
 
     public boolean remove(L event) {
