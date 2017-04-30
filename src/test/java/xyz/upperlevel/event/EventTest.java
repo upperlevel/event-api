@@ -14,15 +14,22 @@ public class EventTest {
     }
 
     @Data
-    public static class MailReadyEvent implements Event {
+    public static class MailEvent implements Event {
         public final String text;
+    }
+
+    @Data
+    public static class MailReadyEvent extends MailEvent {
+        public MailReadyEvent(String text) {
+            super(text);
+        }
     }
 
 
     public static class IdkListener implements Listener {
 
         @EventHandler(priority = EventPriority.LOW)
-        public void onMailReady(MailReadyEvent event) {
+        public void onMailReady(MailEvent event) {
             System.out.println("ready! -> " + event.getText());
         }
 

@@ -35,7 +35,7 @@ public abstract class GeneralEventManager<E extends Event, L extends GeneralEven
             try {
                 l = eventHandlerToListener(listener, method, handler.priority());
             } catch (Exception e) {
-                throw new RuntimeException("Exception caught while registering " + listener.getClass().getSimpleName(), e);
+                throw new RuntimeException("Exception caught while registering " + listener.getClass().getSimpleName() + ":" + method.getName(), e);
             }
             register(l);
         }
@@ -80,13 +80,6 @@ public abstract class GeneralEventManager<E extends Event, L extends GeneralEven
         if (listeners != null)
             for (L listener : listeners)
                 execute(listener, event);
-
-        if(isBase(clazz))
-            return;
-
-        Class<?> superClazz = clazz.getSuperclass();
-        if(superClazz != CancellableEvent.class)
-            call0(superClazz, event);
     }
 
     protected boolean isBase(Class<?> clazz) {
@@ -97,19 +90,31 @@ public abstract class GeneralEventManager<E extends Event, L extends GeneralEven
         return false;
     }
 
-    @SuppressWarnings("unchecked")
     public void bake(Class<?> clazz) {
+        List<L> baked = bake0(clazz);
+        if(!baked.isEmpty()) {
+            L[] b = baked.toArray(newListenerArray(0));
+            byEventBaked.put(clazz, b);
+        }
+    }
+
+    protected List<L> bake0(Class<?> clazz) {
         Map<Byte, Set<L>> handlers = byListenerAndPriority.get(clazz);
+        List<L> baked;
 
         if (handlers != null) {
-            L[] baked = newListenerArray(handlers.values().stream().mapToInt(Set::size).sum());
-            int i = 0;
+            baked = new ArrayList<>();
 
             for (Set<L> listeners : handlers.values())
-                for (L listener : listeners)
-                    baked[i++] = listener;
-            byEventBaked.put(clazz, baked);
+                baked.addAll(listeners);
+        } else baked = Collections.emptyList();
+
+        if(!isBase(clazz)) {
+            Class<?> superClazz = clazz.getSuperclass();
+            if (superClazz != CancellableEvent.class)
+                baked.addAll(bake0(superClazz));
         }
+        return baked;
     }
 
     public abstract L[] newListenerArray(int size);
