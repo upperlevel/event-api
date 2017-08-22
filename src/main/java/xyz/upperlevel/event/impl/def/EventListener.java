@@ -6,27 +6,32 @@ import xyz.upperlevel.event.impl.BaseGeneralEventListener;
 
 import java.util.function.Consumer;
 
-public class EventListener<E extends Event> extends BaseGeneralEventListener<E> {
-    private final Consumer<E> consumer;
+public abstract class EventListener<E extends Event> extends BaseGeneralEventListener<E> {
 
-    public EventListener(Class<E> clazz, byte priority, Consumer<E> consumer) {
+    public EventListener(Class<?> clazz, byte priority) {
         super(clazz, priority);
-        this.consumer = consumer;
     }
 
-    public EventListener(Class<E> clazz, Consumer<E> consumer) {
-        this(clazz, EventPriority.NORMAL, consumer);
+    public EventListener(Class<?> clazz) {
+        super(clazz, EventPriority.NORMAL);
     }
 
-    public void call(E event) {
-        consumer.accept(event);
-    }
+
+    public abstract void call(E event);
 
     public static <E extends Event> EventListener<E> listener(Class<E> clazz, Consumer<E> consumer, byte priority) {
-        return new EventListener<>(clazz, priority, consumer);
+        return new SimpleEventListener<>(clazz, priority, consumer);
     }
 
     public static <E extends Event> EventListener<E> listener(Class<E> clazz, Consumer<E> consumer) {
-        return new EventListener<>(clazz, EventPriority.NORMAL, consumer);
+        return new SimpleEventListener<>(clazz, EventPriority.NORMAL, consumer);
+    }
+
+    public static <E extends Event> EventListener<E> of(Class<E> clazz, Consumer<E> consumer, byte priority) {
+        return new SimpleEventListener<>(clazz, priority, consumer);
+    }
+
+    public static <E extends Event> EventListener<E> of(Class<E> clazz, Consumer<E> consumer) {
+        return new SimpleEventListener<>(clazz, EventPriority.NORMAL, consumer);
     }
 }

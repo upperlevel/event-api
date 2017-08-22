@@ -5,6 +5,7 @@ import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import java.lang.reflect.Method;
 import java.util.*;
+import java.util.function.Consumer;
 
 @RequiredArgsConstructor
 public abstract class GeneralEventManager<E extends Event, L extends GeneralEventListener<E>> {
@@ -16,6 +17,11 @@ public abstract class GeneralEventManager<E extends Event, L extends GeneralEven
             register(events.next());
     }
 
+    public void unregister(Iterator<GeneralEventListener<? extends E>> events) {
+        while(events.hasNext())
+            unregister(events.next());
+    }
+
     @SuppressWarnings("unchecked")
     public void register(GeneralEventListener<? extends E> listener) {
         Map<Byte, Set<L>> handlers = byListenerAndPriority.computeIfAbsent(listener.getClazz(), k -> new HashMap<>());
@@ -23,6 +29,20 @@ public abstract class GeneralEventManager<E extends Event, L extends GeneralEven
         Set<L> l = handlers.computeIfAbsent(listener.getPriority(), k -> new HashSet<>());
         l.add((L) listener);
         bake(listener.getClazz());
+    }
+
+    public boolean unregister(GeneralEventListener<? extends E> listener) {
+        Map<Byte, Set<L>> handlers = byListenerAndPriority.get(listener.getClazz());
+        if(handlers == null)
+            return false;
+
+        Set<L> priorityMapped = handlers.get(listener.getPriority());
+        if(priorityMapped == null)
+            return false;
+        if(priorityMapped.remove(listener)) {
+            bake(listener.getClazz());
+            return true;
+        } else return false;
     }
 
     public void register(Listener listener) {
@@ -41,28 +61,25 @@ public abstract class GeneralEventManager<E extends Event, L extends GeneralEven
         }
     }
 
+    public void unregister(Listener listener) {
+        Method[] methods = listener.getClass().getDeclaredMethods();
+        for(Method method : methods) {
+            EventHandler handler = method.getAnnotation(EventHandler.class);
+            if(handler == null)
+                continue;
+            L l;
+            try {
+                l = eventHandlerToListener(listener, method, handler.priority());
+            } catch (Exception e) {
+                throw new RuntimeException("Exception caught while registering " + listener.getClass().getSimpleName() + ":" + method.getName(), e);
+            }
+            if(!unregister(l))
+                throw new IllegalStateException("Cannot remove method " + method);
+        }
+    }
+
     protected L eventHandlerToListener(Object listener, Method method, byte priority) throws Exception {
         throw new NotImplementedException();
-    }
-
-    public boolean remove(L event) {
-        for (Map.Entry<Class<?>, Map<Byte, Set<L>>> entry : byListenerAndPriority.entrySet()) {
-            Set<L> l = entry.getValue().get(event.getPriority());
-            if (l != null)
-                if (l.remove(event)) {
-                    bake(entry.getKey());
-                    return true;
-                }
-        }
-        return false;
-    }
-
-    @SuppressWarnings("unchecked")
-    public boolean contains(L event) {
-        return byListenerAndPriority.values().stream()
-                .map(m -> m.get(event.getPriority()))
-                .filter(Objects::nonNull)
-                .anyMatch(l -> l.contains(event));
     }
 
     public void call(E event) {
@@ -74,7 +91,7 @@ public abstract class GeneralEventManager<E extends Event, L extends GeneralEven
     }
 
     @SuppressWarnings("unchecked")
-    protected void call0(Class<?> clazz, E event) {//TODO: optimize the super events call in the bake method
+    protected void call0(Class<?> clazz, E event) {
         L[] listeners = byEventBaked.get(clazz);
 
         if (listeners != null)
@@ -95,7 +112,7 @@ public abstract class GeneralEventManager<E extends Event, L extends GeneralEven
         if(!baked.isEmpty()) {
             L[] b = baked.toArray(newListenerArray(0));
             byEventBaked.put(clazz, b);
-        }
+        } else byEventBaked.remove(clazz);
     }
 
     protected List<L> bake0(Class<?> clazz) {
