@@ -27,6 +27,24 @@ public class EventListenerHashTest {
                 new SimpleEventListener(String.class, consumer),
                 new SimpleEventListener(String.class, consumer)
         );
+
+        Assert.assertNotEquals(
+                "SimpleEventListener",
+                new SimpleEventListener(String.class, EventPriority.HIGH, consumer),
+                new SimpleEventListener(String.class, EventPriority.LOW, consumer)
+        );
+
+        Assert.assertNotEquals(
+                "SimpleEventListener",
+                new SimpleEventListener(Integer.class, consumer),
+                new SimpleEventListener(String.class, consumer)
+        );
+
+        Assert.assertNotEquals(
+                "SimpleEventListener",
+                new SimpleEventListener(String.class, consumer),
+                new SimpleEventListener(String.class, new TestConsumer(61))
+        );
     }
 
     @EqualsAndHashCode

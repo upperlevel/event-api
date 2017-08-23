@@ -16,16 +16,16 @@ public class EventManager extends GeneralEventManager<Event, EventListener<Event
 
     @Override
     @SuppressWarnings("unchecked")
-    protected EventListener<Event> eventHandlerToListener(Object listener, Method method, byte priority) throws Exception {
+    protected EventListener<Event> eventHandlerToListener(Object instance, Method listener, byte priority) throws Exception {
         Class<?> argument;
-        if(method.getParameterCount() != 1)
+        if(listener.getParameterCount() != 1)
             throw new IllegalArgumentException("Cannot derive EventListener from the argument method: bad argument number");
-        if(!Event.class.isAssignableFrom(argument = method.getParameterTypes()[0]))
+        if(!Event.class.isAssignableFrom(argument = listener.getParameterTypes()[0]))
             throw new IllegalArgumentException("Cannot derive EventListener from the argument method: bad argument type");
 
-        method.setAccessible(true);
+        listener.setAccessible(true);
 
-        return new ReflectionEventListener(argument, priority, method, listener);
+        return new ReflectionEventListener(argument, priority, listener, instance);
     }
 
     protected void log(String error, Exception e) {

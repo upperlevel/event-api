@@ -5,7 +5,7 @@ import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import java.lang.reflect.Method;
 import java.util.*;
-import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 public abstract class GeneralEventManager<E extends Event, L extends GeneralEventListener<E>> {
@@ -113,6 +113,11 @@ public abstract class GeneralEventManager<E extends Event, L extends GeneralEven
             L[] b = baked.toArray(newListenerArray(0));
             byEventBaked.put(clazz, b);
         } else byEventBaked.remove(clazz);
+
+        for(Class<?> other : byListenerAndPriority.keySet()) {
+            if(other != clazz && clazz.isAssignableFrom(other))
+                bake(other);
+        }
     }
 
     protected List<L> bake0(Class<?> clazz) {
@@ -120,10 +125,10 @@ public abstract class GeneralEventManager<E extends Event, L extends GeneralEven
         List<L> baked;
 
         if (handlers != null) {
-            baked = new ArrayList<>();
-
-            for (Set<L> listeners : handlers.values())
-                baked.addAll(listeners);
+            baked = handlers.entrySet().stream()
+                    .sorted(Comparator.comparingInt(Map.Entry::getKey))
+                    .flatMap(e -> e.getValue().stream())
+                    .collect(Collectors.toList());
         } else baked = Collections.emptyList();
 
         if(!isBase(clazz)) {

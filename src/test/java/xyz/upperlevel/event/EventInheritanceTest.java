@@ -1,6 +1,5 @@
 package xyz.upperlevel.event;
 
-import lombok.Data;
 import org.junit.Test;
 import xyz.upperlevel.event.impl.def.EventManager;
 
@@ -10,15 +9,12 @@ public class EventInheritanceTest implements Listener {
 
     private int mails, received, sent;
 
-    @Data
     public static class MailEvent implements Event {
     }
 
-    @Data
     public static class MailReceiveEvent extends MailEvent {
     }
 
-    @Data
     public static class MailSendEvent extends MailEvent {
     }
 
@@ -32,6 +28,32 @@ public class EventInheritanceTest implements Listener {
     public void test() {
         EventManager manager = new EventManager();
         manager.register(this);
+
+        reset();
+        manager.call(new MailEvent());
+        assertEquals(1, mails);
+        assertEquals(0, received);
+        assertEquals(0, sent);
+
+        reset();
+        manager.call(new MailReceiveEvent());
+        assertEquals(1, mails);
+        assertEquals(1, received);
+        assertEquals(0, sent);
+
+        reset();
+        manager.call(new MailSendEvent());
+        assertEquals(1, mails);
+        assertEquals(0, received);
+        assertEquals(1, sent);
+    }
+
+    @Test
+    public void testOrderIndependence() {
+        EventManager manager = new EventManager();
+        manager.register(MailReceiveEvent.class, this::onMailReceive);
+        manager.register(MailEvent.class, this::onMail);
+        manager.register(MailSendEvent.class, this::onMailSend);
 
         reset();
         manager.call(new MailEvent());

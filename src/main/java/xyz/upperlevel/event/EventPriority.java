@@ -7,7 +7,8 @@ public class EventPriority {
     public static final byte HIGH = 32;
     public static final byte HIGHEST = 64;
 
-    public static void test() {
-
-    }
+    /**
+     * The MONITOR priority is the last priority to be called, in this priority no listener should change the event
+     */
+    public static final byte MONITOR = 127;
 }
