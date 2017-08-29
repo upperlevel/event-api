@@ -1,8 +1,6 @@
 package xyz.upperlevel.event;
 
 import org.junit.Test;
-import xyz.upperlevel.event.impl.def.EventListener;
-import xyz.upperlevel.event.impl.def.EventManager;
 
 import static org.junit.Assert.assertEquals;
 

@@ -1,7 +1,8 @@
-package xyz.upperlevel.event.impl.def;
+package xyz.upperlevel.event;
 
 import lombok.EqualsAndHashCode;
 import xyz.upperlevel.event.Event;
+import xyz.upperlevel.event.EventListener;
 import xyz.upperlevel.event.EventPriority;
 
 import java.util.function.Consumer;

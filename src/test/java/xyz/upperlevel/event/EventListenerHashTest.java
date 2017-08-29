@@ -4,7 +4,6 @@ import lombok.EqualsAndHashCode;
 import lombok.RequiredArgsConstructor;
 import org.junit.Assert;
 import org.junit.Test;
-import xyz.upperlevel.event.impl.def.SimpleEventListener;
 
 import java.util.function.Consumer;
 

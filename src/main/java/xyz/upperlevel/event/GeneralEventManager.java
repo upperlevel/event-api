@@ -1,43 +1,49 @@
 package xyz.upperlevel.event;
 
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
+import lombok.Setter;
 
-import java.lang.annotation.*;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.*;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
-public abstract class GeneralEventManager<E extends Event, L extends GeneralEventListener<E>> {
-    private final Map<Class<?>, Map<Byte, Set<L>>> byListenerAndPriority = new HashMap<>();
-    private final Map<Class<?>, L[]> byEventBaked = new HashMap<>();
+public abstract class GeneralEventManager<E extends Event> {
+    private final Class<E> clazz;
+    private final Map<Class<?>, Map<Byte, Set<EventListener<? extends E>>>> byListenerAndPriority = new HashMap<>();
+    private final Map<Class<?>, EventListener<? extends E>[]> byEventBaked = new HashMap<>();
+    @Getter
+    @Setter
+    private Consumer<Exception> exceptionHandler = Exception::printStackTrace;
 
-    public void register(Iterator<GeneralEventListener<? extends E>> events) {
+    public void register(Iterator<EventListener<? extends E>> events) {
         while(events.hasNext())
             register(events.next());
     }
 
-    public void unregister(Iterator<GeneralEventListener<? extends E>> events) {
+    @SuppressWarnings("unchecked")
+    public void register(EventListener<? extends E> listener) {
+        Map<Byte, Set<EventListener<? extends E>>> handlers = byListenerAndPriority.computeIfAbsent(listener.getClazz(), k -> new HashMap<>());
+
+        Set<EventListener<? extends E>> l = handlers.computeIfAbsent(listener.getPriority(), k -> new HashSet<>());
+        l.add(listener);
+        bake(listener.getClazz());
+    }
+
+    public void unregister(Iterator<EventListener<? extends E>> events) {
         while(events.hasNext())
             unregister(events.next());
     }
 
-    @SuppressWarnings("unchecked")
-    public void register(GeneralEventListener<? extends E> listener) {
-        Map<Byte, Set<L>> handlers = byListenerAndPriority.computeIfAbsent(listener.getClazz(), k -> new HashMap<>());
-
-        Set<L> l = handlers.computeIfAbsent(listener.getPriority(), k -> new HashSet<>());
-        l.add((L) listener);
-        bake(listener.getClazz());
-    }
-
-    public boolean unregister(GeneralEventListener<? extends E> listener) {
-        Map<Byte, Set<L>> handlers = byListenerAndPriority.get(listener.getClazz());
+    public boolean unregister(EventListener<? extends E> listener) {
+        Map<Byte, Set<EventListener<? extends E>>> handlers = byListenerAndPriority.get(listener.getClazz());
         if(handlers == null)
             return false;
 
-        Set<L> priorityMapped = handlers.get(listener.getPriority());
+        Set<? extends EventListener> priorityMapped = handlers.get(listener.getPriority());
         if(priorityMapped == null)
             return false;
         if(priorityMapped.remove(listener)) {
@@ -57,7 +63,7 @@ public abstract class GeneralEventManager<E extends Event, L extends GeneralEven
 
             if(handler == null)
                 continue;
-            L l;
+            EventListener<? extends E> l;
             try {
                 l = eventHandlerToListener(listener, method, handler.priority());
             } catch (Exception e) {
@@ -70,7 +76,6 @@ public abstract class GeneralEventManager<E extends Event, L extends GeneralEven
     }
 
 
-
     public void unregister(Listener listener) {
         unregister0(listener, listener.getClass());
     }
@@ -81,7 +86,7 @@ public abstract class GeneralEventManager<E extends Event, L extends GeneralEven
             EventHandler handler = method.getAnnotation(EventHandler.class);
             if(handler == null)
                 continue;
-            L l;
+            EventListener<? extends E> l;
             try {
                 l = eventHandlerToListener(listener, method, handler.priority());
             } catch (Exception e) {
@@ -95,25 +100,26 @@ public abstract class GeneralEventManager<E extends Event, L extends GeneralEven
     }
 
 
-    protected L eventHandlerToListener(Object listener, Method method, byte priority) throws Exception {
-        throw new NotImplementedException();
-    }
+    @SuppressWarnings("unchecked")
+    protected EventListener<? extends E> eventHandlerToListener(Object instance, Method listener, byte priority) throws Exception {
+        Class<?> argument;
+        if (listener.getParameterCount() != 1)
+            throw new IllegalArgumentException("Cannot derive EventListener from the argument method: bad argument number");
+        if (!clazz.isAssignableFrom(argument = listener.getParameterTypes()[0]))
+            throw new IllegalArgumentException("Cannot derive EventListener from the argument method: bad argument type");
 
-    public void call(E event) {
-        call0(event.getClass(), event);
-    }
+        listener.setAccessible(true);
 
-    public void call(E event, Class<?> clazz) {
-        call0(clazz, event);
+        return new ReflectionEventListener(argument, priority, listener, instance);
     }
 
     @SuppressWarnings("unchecked")
-    protected void call0(Class<?> clazz, E event) {
-        L[] listeners = byEventBaked.get(clazz);
+    public void call(E event) {
+        EventListener<? extends E>[] listeners = byEventBaked.get(event.getClass());
 
         if (listeners != null)
-            for (L listener : listeners)
-                execute(listener, event);
+            for (EventListener listener : listeners)
+                listener.call(event);
     }
 
     protected boolean isBase(Class<?> clazz) {
@@ -124,10 +130,11 @@ public abstract class GeneralEventManager<E extends Event, L extends GeneralEven
         return false;
     }
 
+    @SuppressWarnings("unchecked")
     public void bake(Class<?> clazz) {
-        List<L> baked = bake0(clazz);
+        List<EventListener<? extends E>> baked = bake0(clazz);
         if(!baked.isEmpty()) {
-            L[] b = baked.toArray(newListenerArray(0));
+            EventListener<? extends E>[] b = baked.toArray(new EventListener[0]);
             byEventBaked.put(clazz, b);
         } else byEventBaked.remove(clazz);
 
@@ -137,9 +144,9 @@ public abstract class GeneralEventManager<E extends Event, L extends GeneralEven
         }
     }
 
-    protected List<L> bake0(Class<?> clazz) {
-        Map<Byte, Set<L>> handlers = byListenerAndPriority.get(clazz);
-        List<L> baked;
+    protected List<EventListener<? extends E>> bake0(Class<?> clazz) {
+        Map<Byte, Set<EventListener<? extends E>>> handlers = byListenerAndPriority.get(clazz);
+        List<EventListener<? extends E>> baked;
 
         if (handlers != null) {
             baked = handlers.entrySet().stream()
@@ -156,7 +163,50 @@ public abstract class GeneralEventManager<E extends Event, L extends GeneralEven
         return baked;
     }
 
-    public abstract L[] newListenerArray(int size);
+    @Getter
+    public class ReflectionEventListener<T extends Event> extends EventListener<T> {
+        private final Method listener;
+        private final Object instance;
 
-    protected abstract void execute(L listener, E event);
+        public ReflectionEventListener(Class<T> clazz, byte priority, Method listener, Object instance) {
+            super(clazz, priority);
+            this.listener = listener;
+            this.instance = instance;
+        }
+
+        public void call(T event) {
+            try {
+                listener.invoke(instance, event);
+            } catch (IllegalAccessException e1) {
+                throw new RuntimeException("Error accessing " + listener.getDeclaringClass().getSimpleName() + ":" + listener.getName());
+            } catch (InvocationTargetException e1) {
+                getExceptionHandler().accept(e1);
+            }
+        }
+
+        //Auto-created by lombok
+        //Thanks lombok's authors for not fixing this "feature"! https://github.com/rzwitserloot/lombok/issues/1381
+        public boolean equals(Object o) {
+            if (o == this) return true;
+            if (!(o instanceof GeneralEventManager.ReflectionEventListener)) return false;
+            final ReflectionEventListener other = (ReflectionEventListener) o;
+            if (!super.equals(o)) return false;
+            final Object this$listener = this.getListener();
+            final Object other$listener = other.getListener();
+            if (this$listener == null ? other$listener != null : !this$listener.equals(other$listener)) return false;
+            final Object this$instance = this.getInstance();
+            final Object other$instance = other.getInstance();
+            if (this$instance == null ? other$instance != null : !this$instance.equals(other$instance)) return false;
+            return true;
+        }
+
+        public int hashCode() {
+            final int PRIME = 59;
+            int result = 1;
+            result = result * PRIME + super.hashCode();
+            result = result * PRIME + (listener == null ? 43 : listener.hashCode());
+            result = result * PRIME + (instance == null ? 43 : instance.hashCode());
+            return result;
+        }
+    }
 }
