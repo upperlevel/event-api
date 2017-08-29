@@ -3,6 +3,7 @@ package xyz.upperlevel.event;
 import lombok.RequiredArgsConstructor;
 import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
+import java.lang.annotation.*;
 import java.lang.reflect.Method;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -46,9 +47,14 @@ public abstract class GeneralEventManager<E extends Event, L extends GeneralEven
     }
 
     public void register(Listener listener) {
-        Method[] methods = listener.getClass().getDeclaredMethods();
+        register0(listener, listener.getClass());
+    }
+
+    protected void register0(Listener listener, Class<?> clazz) {
+        Method[] methods = clazz.getDeclaredMethods();
         for(Method method : methods) {
             EventHandler handler = method.getAnnotation(EventHandler.class);
+
             if(handler == null)
                 continue;
             L l;
@@ -59,10 +65,18 @@ public abstract class GeneralEventManager<E extends Event, L extends GeneralEven
             }
             register(l);
         }
+        if(clazz.getSuperclass() != null)
+            register0(listener, clazz.getSuperclass());
     }
 
+
+
     public void unregister(Listener listener) {
-        Method[] methods = listener.getClass().getDeclaredMethods();
+        unregister0(listener, listener.getClass());
+    }
+
+    protected void unregister0(Listener listener, Class<?> clazz) {
+        Method[] methods = clazz.getMethods();
         for(Method method : methods) {
             EventHandler handler = method.getAnnotation(EventHandler.class);
             if(handler == null)
@@ -76,7 +90,10 @@ public abstract class GeneralEventManager<E extends Event, L extends GeneralEven
             if(!unregister(l))
                 throw new IllegalStateException("Cannot remove method " + method);
         }
+        if(clazz.getSuperclass() != null)
+            unregister0(listener, clazz.getSuperclass());
     }
+
 
     protected L eventHandlerToListener(Object listener, Method method, byte priority) throws Exception {
         throw new NotImplementedException();
