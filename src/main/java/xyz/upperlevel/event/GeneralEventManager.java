@@ -178,14 +178,15 @@ public abstract class GeneralEventManager<E extends Event> {
 
         public ReflectionEventListener(Class<T> clazz, byte priority, MethodHandle method, Method listener, Object instance) {
             super(clazz, priority);
-            this.method = method.asType(method.type().changeParameterType(0, Object.class).changeParameterType(1, Event.class));
+            method = method.bindTo(instance);
+            this.method = method.asType(method.type().changeParameterType(0, Event.class));
             this.listener = listener;
             this.instance = instance;
         }
 
         public void call(T event) {
             try {
-                method.invokeExact(instance, event);
+                method.invokeExact(event);
             } catch (Throwable t) {
                 getExceptionHandler().accept(t);
             }
