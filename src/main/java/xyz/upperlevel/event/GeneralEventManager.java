@@ -4,7 +4,8 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 
-import java.lang.reflect.InvocationTargetException;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Method;
 import java.util.*;
 import java.util.function.Consumer;
@@ -17,7 +18,12 @@ public abstract class GeneralEventManager<E extends Event> {
     private final Map<Class<?>, EventListener<? extends E>[]> byEventBaked = new HashMap<>();
     @Getter
     @Setter
-    private Consumer<Exception> exceptionHandler = Exception::printStackTrace;
+    private Consumer<Throwable> exceptionHandler = (e) -> {
+        if(e instanceof Exception)
+            e.printStackTrace();
+        else
+            throw new IllegalStateException(e);
+    };
 
     public void register(Iterator<EventListener<? extends E>> events) {
         while(events.hasNext())
@@ -109,8 +115,9 @@ public abstract class GeneralEventManager<E extends Event> {
             throw new IllegalArgumentException("Cannot derive EventListener from the argument method: bad argument type");
 
         listener.setAccessible(true);
+        MethodHandle method = MethodHandles.lookup().unreflect(listener);
 
-        return new ReflectionEventListener(argument, priority, listener, instance);
+        return new ReflectionEventListener(argument, priority, method, listener, instance);
     }
 
     @SuppressWarnings("unchecked")
@@ -165,22 +172,23 @@ public abstract class GeneralEventManager<E extends Event> {
 
     @Getter
     public class ReflectionEventListener<T extends Event> extends EventListener<T> {
+        private final MethodHandle method;
         private final Method listener;
         private final Object instance;
 
-        public ReflectionEventListener(Class<T> clazz, byte priority, Method listener, Object instance) {
+        public ReflectionEventListener(Class<T> clazz, byte priority, MethodHandle method, Method listener, Object instance) {
             super(clazz, priority);
+            this.method = method;
+            //this.method = method.asType(method.type().changeParameterType(0, Object.class).changeParameterType(1, Event.class));
             this.listener = listener;
             this.instance = instance;
         }
 
         public void call(T event) {
             try {
-                listener.invoke(instance, event);
-            } catch (IllegalAccessException e1) {
-                throw new RuntimeException("Error accessing " + listener.getDeclaringClass().getSimpleName() + ":" + listener.getName());
-            } catch (InvocationTargetException e1) {
-                getExceptionHandler().accept(e1);
+                method.invoke(instance, event);
+            } catch (Throwable t) {
+                getExceptionHandler().accept(t);
             }
         }
 

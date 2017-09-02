@@ -1,9 +1,5 @@
 package xyz.upperlevel.event;
 
-import xyz.upperlevel.event.CancellableEvent;
-import xyz.upperlevel.event.Event;
-import xyz.upperlevel.event.GeneralEventManager;
-
 import java.util.function.Consumer;
 
 import static xyz.upperlevel.event.EventListener.listener;
