@@ -5,14 +5,13 @@ plugins {
     id 'io.franzbecker.gradle-lombok' version '1.7'
 }
 
-allprojects {
-    group = 'xyz.upperlevel.event'
-    version = '1.0.1'
-    description = """Simple java event system"""
 
-    sourceCompatibility = 1.8
-    targetCompatibility = 1.8
-}
+group = 'xyz.upperlevel.event'
+version = '1.0.1'
+description = """Simple java event system"""
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
 
 repositories {
     mavenLocal()
