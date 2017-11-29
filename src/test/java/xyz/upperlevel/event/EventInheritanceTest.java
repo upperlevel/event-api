@@ -73,6 +73,26 @@ public class EventInheritanceTest implements Listener {
         assertEquals(1, sent);
     }
 
+    @Test
+    public void testPartialInheritanceIndependence() {
+        EventManager manager = new EventManager();
+        //manager.register(MailReceiveEvent.class, this::onMailReceive);
+        manager.register(MailEvent.class, this::onMail);
+        manager.register(MailSendEvent.class, this::onMailSend);
+
+        reset();
+        manager.call(new MailEvent());
+        assertEquals(1, mails);
+        assertEquals(0, received);
+        assertEquals(0, sent);
+
+        reset();
+        manager.call(new MailReceiveEvent());
+        assertEquals(1, mails);
+        //assertEquals(1, received);
+        assertEquals(0, sent);
+    }
+
     @EventHandler
     public void onMail(MailEvent event) {
         mails++;

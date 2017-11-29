@@ -122,17 +122,38 @@ public abstract class GeneralEventManager<E extends Event> {
 
     @SuppressWarnings("unchecked")
     public void call(E event) {
-        EventListener<? extends E>[] listeners = byEventBaked.get(event.getClass());
+        Class<?> clazz = event.getClass();
+        do {
+            EventListener<? extends E>[] listeners = byEventBaked.get(clazz);
 
-        if (listeners != null)
-            for (EventListener listener : listeners)
-                listener.call(event);
+            if (listeners != null) {
+                // If this class is in the map
+                // Call the event
+                for (EventListener listener : listeners) {
+                    listener.call(event);
+                }
+                //And exit
+                return;
+            }
+            // If it wasn't in the map
+            // And it can have event children
+            if (isBase(clazz)) return;
+
+            // Get the children
+            clazz = clazz.getSuperclass();
+
+            // (assure that it's callable)
+            if (clazz == CancellableEvent.class) return;
+            // And reiterate
+        } while (true);
     }
 
     protected boolean isBase(Class<?> clazz) {
+        if (clazz == null) return true;
         for(Class<?> i : clazz.getInterfaces()) {
-            if (isBase(i) || i == Event.class)
+            if (i == Event.class || isBase(i)) {
                 return true;
+            }
         }
         return false;
     }
