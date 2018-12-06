@@ -2,7 +2,7 @@ plugins {
     id 'java'
     id 'maven'
     id 'idea'
-    id 'io.franzbecker.gradle-lombok' version '1.7'
+    id 'io.franzbecker.gradle-lombok' version '1.14'
 }
 
 

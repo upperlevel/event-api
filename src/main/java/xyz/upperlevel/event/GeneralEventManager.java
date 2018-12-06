@@ -9,13 +9,16 @@ import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Method;
 import java.util.*;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @RequiredArgsConstructor
 public abstract class GeneralEventManager<E extends Event> {
     private final Class<E> clazz;
     private final Map<Class<?>, Map<Byte, Set<EventListener<? extends E>>>> byListenerAndPriority = new HashMap<>();
     private final Map<Class<?>, EventListener<? extends E>[]> byEventBaked = new HashMap<>();
+    @Getter
+    private GeneralEventManager<? super E> parent;
+    private Set<GeneralEventManager<? extends E>> children = new HashSet<>();
     @Getter
     @Setter
     private Consumer<Throwable> exceptionHandler = (e) -> {
@@ -64,7 +67,7 @@ public abstract class GeneralEventManager<E extends Event> {
 
     protected void register0(Listener listener, Class<?> clazz) {
         Method[] methods = clazz.getDeclaredMethods();
-        for(Method method : methods) {
+        for (Method method : methods) {
             EventHandler handler = method.getAnnotation(EventHandler.class);
 
             if(handler == null)
@@ -103,6 +106,26 @@ public abstract class GeneralEventManager<E extends Event> {
         }
         if(clazz.getSuperclass() != null)
             unregister0(listener, clazz.getSuperclass());
+    }
+
+    public void setParent(GeneralEventManager<? super E> parent) {
+        if (this.parent != null) {
+            this.parent.unregisterChild(this);
+        }
+        this.parent = parent;
+        parent.registerChild(this);
+        List<Class<?>> toRebuild = new ArrayList<>(byEventBaked.keySet());
+        for (Class<?> clazz : toRebuild) {
+            bake(clazz);
+        }
+    }
+
+    protected void registerChild(GeneralEventManager<? extends E> child) {
+        children.add(child);
+    }
+
+    protected void unregisterChild(GeneralEventManager<? extends E> child) {
+        children.remove(child);
     }
 
 
@@ -160,35 +183,55 @@ public abstract class GeneralEventManager<E extends Event> {
 
     @SuppressWarnings("unchecked")
     public void bake(Class<?> clazz) {
-        List<EventListener<? extends E>> baked = bake0(clazz);
-        if(!baked.isEmpty()) {
-            EventListener<? extends E>[] b = baked.toArray(new EventListener[0]);
-            byEventBaked.put(clazz, b);
-        } else byEventBaked.remove(clazz);
-
-        for(Class<?> other : byListenerAndPriority.keySet()) {
-            if(other != clazz && clazz.isAssignableFrom(other))
-                bake(other);
+        bakeAndAssign(clazz);
+        for (Class<?> other : byListenerAndPriority.keySet()) {
+            if (other != clazz && clazz.isAssignableFrom(other)) {
+                bakeAndAssign(other);
+            }
+        }
+        // We need to notify our children of the changes (make them re-bake the classes
+        for (GeneralEventManager<? extends E> child : children) {
+            child.bake(clazz);
         }
     }
 
-    protected List<EventListener<? extends E>> bake0(Class<?> clazz) {
-        Map<Byte, Set<EventListener<? extends E>>> handlers = byListenerAndPriority.get(clazz);
-        List<EventListener<? extends E>> baked;
+    protected void bakeAndAssign(Class<?> clazz) {
+        EventListener<? extends E>[] baked = bakePolymorphic(clazz)
+                .toArray(EventListener[]::new);
 
-        if (handlers != null) {
-            baked = handlers.entrySet().stream()
-                    .sorted(Comparator.comparingInt(Map.Entry::getKey))
-                    .flatMap(e -> e.getValue().stream())
-                    .collect(Collectors.toList());
-        } else baked = Collections.emptyList();
-
-        if(!isBase(clazz)) {
-            Class<?> superClazz = clazz.getSuperclass();
-            if (superClazz != CancellableEvent.class)
-                baked.addAll(bake0(superClazz));
+        // Put the baked listeners in the byEventBaked array if it isn't empty
+        // remove it from the map otherwise
+        if (baked.length > 0) {
+            byEventBaked.put(clazz, baked);
+        } else {
+            byEventBaked.remove(clazz);
         }
-        return baked;
+    }
+
+    protected Stream<Map.Entry<Byte, EventListener<? extends E>>> bakeClassNoInheritance(Class<?> clazz) {
+        if (!byListenerAndPriority.containsKey(clazz)) return Stream.empty();
+        Stream<Map.Entry<Byte, EventListener<? extends E>>> res = byListenerAndPriority.get(clazz)
+                .entrySet()// Get entries
+                .stream()// Transform them in streams
+                .flatMap(e -> e.getValue()// FlatMap the Stream<byte -> Set<Listener>> to Stream<(byte, listener)>
+                        .stream()// Transform them into stream
+                        .map(l -> new AbstractMap.SimpleEntry<>(e.getKey(), l))// return a Stream<byte, listener>
+                );
+        if (parent != null) {
+            res = Stream.concat(res, (Stream) parent.bakeClassNoInheritance(clazz));
+        }
+        return res;
+    }
+
+    protected Stream<EventListener<? extends E>> bakePolymorphic(Class<?> clazz) {
+        Stream<Map.Entry<Byte, EventListener<? extends E>>> res = bakeClassNoInheritance(clazz);
+        while (!isBase(clazz)) {
+            clazz = clazz.getSuperclass();
+            res = Stream.concat(res, bakeClassNoInheritance(clazz));
+        }
+        return res
+                .sorted(Comparator.comparingInt(Map.Entry::getKey))
+                .map(Map.Entry::getValue);
     }
 
     @Getter
